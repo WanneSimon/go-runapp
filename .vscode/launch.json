@@ -13,7 +13,7 @@
       "cwd": "${workspaceFolder}",
       "env": {},
       "showLog": true,
-      "args": [ "munkblog", "start", "java", "-jar", "D:/Git_repo/_my/munk-blog-server/target/my test/munk-blog-server-1.0.0.jar"]
+      "args": [ "munkblog", "start", "javaw", "-jar", "D:/Git_repo/_my/munk-blog-server/target/my test/munk-blog-server-1.0.0.jar"]
       // "args": [ "munkblog", "start",  "D:/Git_repo/_my/munk-blog-server/target/my test/run.bat"]
     }
   ]
