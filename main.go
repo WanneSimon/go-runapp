@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -29,11 +30,11 @@ type AppRestart struct {
 
 /*
  * 启动：
- * myapp starts -exec javaw -args "-jar xxx.jar"
+ * myapp starts javaw -jar xxx.jar
  * 停止
  * myapp stop
  * 重启
- * myapp restart
+ * myapp restart [javaw -jar xxx.jar]
  */
 func main() {
 	allArgs := os.Args
@@ -71,9 +72,25 @@ func main() {
 			AppName: appName,
 		})
 	} else if mode == "restart" {
+		var appStart *AppStart
+		var startArg AppStart
+
+		num := len(allArgs)
+		if num > 3 {
+			startArg.AppName = appName
+			startArg.Main = allArgs[3]
+
+			if num > 4 {
+				startArg.Args = allArgs[4:]
+			} else {
+				startArg.Args = make([]string, 0)
+			}
+			appStart = &startArg
+		}
+
 		restartApp(AppRestart{
 			AppName: appName,
-		})
+		}, appStart)
 	} else {
 		usage()
 	}
@@ -81,8 +98,15 @@ func main() {
 
 func usage() {
 	s := OsSeparator()
-	str := s + "Example:" + s + "  myapp start|starts javaw -jar myapp.jar" + s + "  myapp stop" + s + "  myapp restart"
-	log.Println(str)
+	str := s + "Example:"
+
+	startStr := "  myapp start|starts javaw -jar myapp.jar"
+	stopStr := "  myapp stop"
+	restartStr := "  myapp restart [javaw -jar myapp.jar]"
+	noteStr := "  restart 可以和 start|starts 一样后接启动命令。如果有启动命令，那么停止和启动时以参数为准。如果没有则已以pid文件为准。"
+
+	str = str + s + startStr + s + stopStr + s + restartStr + s + s + noteStr
+	fmt.Println(str)
 }
 
 /*
@@ -96,7 +120,7 @@ func startApp(arg AppStart) {
 		os.Exit(1)
 	}
 
-	var pidFile = getFidFile(arg.AppName)
+	var pidFile = getPidFile(arg.AppName)
 	// 非强制启动时检查数据文件是否存在
 	if !arg.Force {
 		info, err := os.Stat(pidFile)
@@ -170,7 +194,7 @@ func stopApp(arg AppStop) {
 		os.Exit(1)
 	}
 
-	var pidFile = getFidFile(arg.AppName)
+	var pidFile = getPidFile(arg.AppName)
 	pid, _ := loadPid(arg.AppName)
 
 	su := stopPid(pid, false)
@@ -207,22 +231,44 @@ func stopApp(arg AppStop) {
  * 重启
  * myapp restart
  */
-func restartApp(arg AppRestart) {
+func restartApp(arg AppRestart, startArg *AppStart) {
 	// 检查参数
 	if arg.AppName == "" {
 		log.Println("缺少APP名称")
 		os.Exit(1)
 	}
 
-	_, appStart := loadPid(arg.AppName)
-	pidFile := getFidFile(arg.AppName)
+	if existPidFile(arg.AppName) { // pid 文件存在
+		var appName = arg.AppName
+		var main string
+		var args []string
+		var pidFile string
 
-	// 停止
-	stopApp(AppStop{
-		AppName: arg.AppName,
-	})
-	// 启动
-	execCMD(appStart.Main, appStart.Args, pidFile)
+		// 如果指定了参数，那么使用指定的参数
+		if startArg != nil {
+			appName = startArg.AppName
+			main = startArg.Main
+			args = startArg.Args
+		} else { // 没有指定参数，则从pid文件中读取
+			_, appStart := loadPid(arg.AppName)
+			main = appStart.AppName
+			args = appStart.Args
+		}
+
+		pidFile = getPidFile(arg.AppName)
+		log.Println("Pid file: " + pidFile)
+		// 停止
+		stopApp(AppStop{
+			AppName: appName,
+		})
+		// 启动
+		execCMD(main, args, pidFile)
+	} else if startArg != nil {
+		// pid 文件不存在，但是参数中有启动命令，直接启动
+		var pidFile string = getPidFile(startArg.AppName)
+		log.Println("Pid file: " + pidFile)
+		execCMD(startArg.Main, startArg.Args, pidFile)
+	}
 }
 
 func stopPid(pid string, force bool) bool {
@@ -271,18 +317,17 @@ func removeFile(file string) {
 	}
 }
 
+// 加载 app 的 pid 文件内容
 func loadPid(appName string) (string, AppStart) {
-	var pidFile = getFidFile(appName)
-	info, err := os.Stat(pidFile)
+	var pidFile = getPidFile(appName)
+	_, err := os.Stat(pidFile)
 	if os.IsNotExist(err) {
-		log.Println("APP信息不存在：" + info.Name())
-		os.Exit(1)
+		panic("APP信息不存在：" + appName)
 	}
 
 	bytes, err := os.ReadFile(pidFile)
 	if err != nil {
-		log.Println("程序信息读取失败！")
-		os.Exit(1)
+		panic("程序信息读取失败！")
 	}
 
 	data := string(bytes)
@@ -301,6 +346,17 @@ func loadPid(appName string) (string, AppStart) {
 	}
 }
 
-func getFidFile(appName string) string {
+// pid 文件名
+func getPidFile(appName string) string {
 	return appName + ".pid"
+}
+
+// app 的 pid 文件是否存在
+func existPidFile(appName string) bool {
+	pidFile := getPidFile(appName)
+	_, err := os.Stat(pidFile)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return true
 }
