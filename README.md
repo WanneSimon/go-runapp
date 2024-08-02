@@ -44,8 +44,11 @@ chcp 65001
 echo "usage: run.bat start|starts|stop|restart"
 ::: go-runapp 文件
 set MAIN_EXE=go-runapp-1.0.0-win-amd64.exe
+::: 名称（请修改为jar）。注册服务请使用绝对路径
+:::set BASE_DIR=E:\Projects\java-spring\
+set BASE_DIR=
 ::: 名称（请修改为jar）
-set APP_NAME=NingBoCollege-0.0.1-SNAPSHOT.jar
+set APP_NAME=%BASE_DIR%SNAPSHOT.jar
 :::set REMOTE_DEBUG=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=15005
 set REMOTE_DEBUG=
 ::: 启动参数（请修改）
